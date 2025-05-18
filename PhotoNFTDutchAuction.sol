@@ -166,7 +166,6 @@ contract PhotoNFTDutchAuction is ERC721, ERC721URIStorage {
         override(ERC721, ERC721URIStorage) // Overriding both as ERC721URIStorage overrides ERC721's
         returns (string memory)
     {
-        // REMOVED: require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
         // The check is handled by super.tokenURI() which calls ERC721URIStorage.tokenURI()
         return super.tokenURI(tokenId);
     }
