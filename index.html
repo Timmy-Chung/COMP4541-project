@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>NFT Dutch Auction DApp</title>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js, html2canvas & Ethers.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
+
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box }
+    body {
+      font-family:'Inter',sans-serif;
+      background:
+        radial-gradient(circle at 25% 25%, rgba(66,165,245,0.15), transparent 30%),
+        radial-gradient(circle at 75% 75%, rgba(126,87,194,0.15), transparent 30%),
+        linear-gradient(135deg,#1d1f21,#282c34);
+      color:#e0e0e0; line-height:1.6; padding:1rem;
+    }
+    h1,h2 { color:#fff; text-shadow:0 0 8px rgba(0,0,0,0.6); margin-bottom:1rem }
+    h1 { font-size:2.5rem } h2 { font-size:1.75rem }
+
+    .section {
+      background:rgba(255,255,255,0.05);
+      backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.2);
+      border-radius:12px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.37);
+      padding:1.5rem; margin-bottom:2rem;
+    }
+
+    label { display:block; margin-bottom:.5rem; font-weight:600 }
+    input[type=text],input[type=number] {
+      width:100%; padding:.75rem; margin-top:.25rem;
+      background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3);
+      border-radius:8px; color:#e0e0e0; font-size:1rem;
+    }
+    input:focus {
+      outline:none; border-color:#7e57c2; box-shadow:0 0 8px rgba(126,87,194,0.5);
+    }
+    button {
+      display:inline-block; padding:.75rem 1.25rem; margin-top:1rem;
+      font-size:1rem;font-weight:600;color:#fff;
+      background:linear-gradient(90deg,#42a5f5,#7e57c2);
+      border:none;border-radius:8px;cursor:pointer;
+      transition:transform .2s,opacity .2s;
+    }
+    button:hover { opacity:.9; transform:translateY(-2px) }
+
+    .result {
+      background:rgba(0,0,0,0.3); margin-top:.75rem; padding:.75rem;
+      border-radius:8px; font-family:monospace; white-space:pre-wrap;
+      color:#fff;
+    }
+
+    #priceChart { width:100%; margin-top:1rem; border-radius:8px; background:rgba(0,0,0,0.2) }
+    #nftImage {
+      max-width:100%; display:block; margin-top:1rem;
+      border:2px solid rgba(255,255,255,0.3); border-radius:8px;
+    }
+
+    /* Share card */
+    #shareSection { display:none; text-align:center }
+    #shareCard {
+      display:inline-block;
+      background:#1e1f22;
+      border-radius:12px;
+      padding:1rem;
+      color:#fff;
+      max-width:320px;
+    }
+    #shareCard img {
+      max-width:100%; border-radius:8px; margin-bottom:.75rem;
+    }
+    #shareCard p { margin:.25rem 0; font-size:1rem; word-break:break-all }
+    #shareActions { margin-top:1rem }
+    #shareActions a {
+      display:inline-block; margin:0 .5rem; padding:.5rem 1rem;
+      background:linear-gradient(90deg,#7e57c2,#42a5f5);
+      color:#fff; border-radius:8px; text-decoration:none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>NFT Dutch Auction</h1>
+
+  <!-- 1. Connect Wallet -->
+  <div class="section" id="walletSection">
+    <h2>1. Connect Wallet</h2>
+    <button id="connectWallet">Connect MetaMask</button>
+    <div id="walletAddress"></div>
+  </div>
+
+  <!-- 2. Create NFT + Auction -->
+  <div class="section" id="createSection" style="opacity:.5;pointer-events:none">
+    <h2>2. Create NFT + Dutch Auction</h2>
+    <form id="createForm">
+      <label>Token Name
+        <input id="tokenName" type="text" required placeholder="e.g. MyPhotoSeries">
+      </label>
+      <label>Token Symbol
+        <input id="tokenSymbol" type="text" required placeholder="e.g. MPS">
+      </label>
+      <label>Token URI (image URL)
+        <input id="tokenURI" type="text" required placeholder="https://...jpg">
+      </label>
+      <label>Starting Price (ETH)
+        <input id="startingPrice" type="number" min="0" step="0.0001" value="0.1" required>
+      </label>
+      <label>Discount Rate (ETH/sec)
+        <input id="discountRate" type="number" min="0" step="0.000001" value="0.000001" required>
+      </label>
+      <label>Auction Duration (sec)
+        <input id="auctionDuration" type="number" min="1" step="1" value="3600" required>
+      </label>
+      <button type="submit">Create Auction</button>
+    </form>
+    <div id="createResult" class="result"></div>
+  </div>
+
+  <!-- 2b. Share Card -->
+  <div class="section" id="shareSection">
+    <h2>🎉 Auction Created! Share It:</h2>
+    <div id="shareCard">
+      <img id="shareNFTImage" alt="NFT Image"/>
+      <p id="shareAddress"></p>
+      <p id="shareStartPrice"></p>
+    </div>
+    <div id="shareActions">
+      <a id="downloadLink" href="#" download="auction.png">Download Image</a>
+      <a id="twitterShare" target="_blank">Share on Twitter (I still will not call it X :) )</a>
+    </div>
+  </div>
+
+  <!-- 3. Buy NFT -->
+  <div class="section" id="buySection" style="opacity:.5;pointer-events:none">
+    <h2>3. Buy an NFT</h2>
+    <form id="buyForm">
+      <label>Auction Contract Address
+        <input id="auctionAddress" type="text" required placeholder="0x...">
+      </label>
+      <button type="button" id="fetchPrice">Get Price &amp; Details</button>
+      <div id="tokenDetails" class="result"></div>
+      <canvas id="priceChart"></canvas>
+      <img id="nftImage" alt="NFT Image"/>
+      <button type="submit">Buy NFT</button>
+    </form>
+    <div id="buyResult" class="result"></div>
+  </div>
+
+<script>
+(async()=>{
+  if(!window.ethereum){
+    alert("Please install MetaMask");
+    return;
+  }
+
+  const factoryAddress = "0x5B6eeE6E468006453d59bA1918fd77F5B5F5994D";
+  const factoryAbi = [
+    "function createPhotoNFTAndAuction(string,string,string,uint256,uint256,uint256) returns(address)",
+    "event NewPhotoAuctionDeployed(address indexed auctionContractAddress,uint256 indexed nftId,address indexed seller,string tokenURI,uint256 startingPrice,uint256 auctionDuration)"
+  ];
+  const auctionAbi = [
+    "function getCurrentPrice() view returns(uint256)",
+    "function buyNFT() payable",
+    "function startingPrice() view returns(uint256)",
+    "function discountRate() view returns(uint256)",
+    "function startAt() view returns(uint256)",
+    "function expiresAt() view returns(uint256)",
+    "function symbol() view returns(string)",
+    "function nftIdToAuction() view returns(uint256)",
+    "function tokenURI(uint256) view returns(string)"
+  ];
+
+  let provider, signer, userAddress, lastPrice, priceChart, shareChart;
+  const $ = id=>document.getElementById(id);
+
+  // 1. Connect
+  $("connectWallet").onclick = async()=>{
+    await ethereum.request({method:"eth_requestAccounts"});
+    await ethereum.request({
+      method:"wallet_switchEthereumChain",
+      params:[{chainId:"0xaa36a7"}]
+    });
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    userAddress = await signer.getAddress();
+    $("walletAddress").innerText = "Address: "+userAddress;
+    $("connectWallet").innerText = "Connected";
+    $("connectWallet").disabled = true;
+    ["createSection","buySection"].forEach(id=>{
+      const s = $(id);
+      s.style.opacity = "1";
+      s.style.pointerEvents = "auto";
+    });
+  };
+
+  // 2. Create Auction
+  $("createForm").onsubmit = async e=>{
+    e.preventDefault();
+    const name   = $("tokenName").value.trim();
+    const sym    = $("tokenSymbol").value.trim();
+    const uri    = $("tokenURI").value.trim();
+    const startBN= ethers.parseEther($("startingPrice").value);
+    const discBN = ethers.parseEther($("discountRate").value);
+    const dur    = Number($("auctionDuration").value);
+    const out    = $("createResult");
+    out.innerText = "";
+
+    try {
+      const code = await provider.getCode(factoryAddress);
+      if(code==="0x") throw new Error("Factory contract not found");
+      const factory = new ethers.Contract(factoryAddress,factoryAbi,signer);
+
+      out.innerText = "⏳ Sending transaction…";
+      const tx = await factory.createPhotoNFTAndAuction(
+        name, sym, uri, startBN, discBN, dur
+      );
+      const receipt = await tx.wait();
+
+      // parse logs for deployed auction address
+      let auctionAddr;
+      for(const log of receipt.logs){
+        try {
+          const parsed = factory.interface.parseLog(log);
+          if(parsed.name==="NewPhotoAuctionDeployed"){
+            auctionAddr = parsed.args.auctionContractAddress;
+            break;
+          }
+        } catch{}
+      }
+      if(!auctionAddr) throw new Error("Event not found");
+
+      // build share card
+      $("shareNFTImage").src = uri;
+      $("shareAddress").innerText    = "Contract: "+auctionAddr;
+      const startEth = ethers.formatEther(startBN);
+      $("shareStartPrice").innerText = "Starting Price: "+startEth+" ETH";
+      $("shareSection").style.display = "block";
+
+      // snapshot card to image
+      setTimeout(()=>{
+        html2canvas($("shareCard"),{backgroundColor:null}).then(canvas=>{
+          const url = canvas.toDataURL("image/png");
+          $("downloadLink").href = url;
+          const tweet = `My auction for ${sym} is live! Contract: ${auctionAddr}`;
+          $("twitterShare").href =
+            "https://twitter.com/intent/tweet?text="+encodeURIComponent(tweet);
+        });
+      },300);
+
+      console.log("Auction created at:",auctionAddr);
+    } catch(err){
+      console.error(err);
+      out.innerText = "❌ "+(err.data?.message||err.message);
+    }
+  };
+
+  // 3a. Fetch Price & Plot Chart
+  $("fetchPrice").onclick = async()=>{
+    const addr = $("auctionAddress").value.trim();
+    const details = $("tokenDetails");
+    details.innerText = "";
+    $("nftImage").src = "";
+
+    if(!addr) return alert("Enter auction address");
+    try{ ethers.getAddress(addr) }catch{ return alert("Invalid address") }
+
+    try {
+      details.innerText = "⏳ Fetching…";
+      const auction = new ethers.Contract(addr, auctionAbi, provider);
+
+      // parallel fetch
+      const [ priceBN, spBN, drBN, saBN, eaBN, sym, tokenId, uri ] =
+        await Promise.all([
+          auction.getCurrentPrice(),
+          auction.startingPrice(),
+          auction.discountRate(),
+          auction.startAt(),
+          auction.expiresAt(),
+          auction.symbol(),
+          auction.nftIdToAuction(),
+          auction.tokenURI(await auction.nftIdToAuction())
+        ]);
+      lastPrice = priceBN;
+      const priceEth = Number(ethers.formatEther(priceBN));
+      details.innerText = `Symbol: ${sym}\nCurrent Price: ${priceEth.toFixed(4)} ETH`;
+
+      // show image
+      $("nftImage").src = uri;
+
+      // build chart data
+      const sp  = Number(spBN), dr = Number(drBN);
+      const startTs = Number(saBN), endTs = Number(eaBN);
+      const duration = endTs - startTs, points=50;
+      const lineData=[];
+      for(let i=0;i<=points;i++){
+        const elapsed = duration * i/points;
+        let p = sp - dr*elapsed;
+        if(p<0)p=0;
+        lineData.push({x:elapsed/3600,y:p/1e18});
+      }
+      // now point
+      const block = await provider.getBlock("latest");
+      const nowX = (block.timestamp - startTs)/3600;
+      const nowY = priceEth;
+
+      if(priceChart) priceChart.destroy();
+      const ctx = $("priceChart").getContext("2d");
+      priceChart = new Chart(ctx,{
+        type:"line",
+        data:{
+          datasets:[
+            {
+              label:"Price Curve",
+              data:lineData,
+              borderColor:"cyan",
+              backgroundColor:"rgba(0,255,255,0.1)",
+              fill:true,
+              tension:0.2,
+              pointRadius:0
+            },
+            {
+              label:"Now",
+              data:[{x:nowX,y:nowY}],
+              type:"scatter",
+              backgroundColor:"magenta",
+              pointRadius:6,
+              showLine:false
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:true,
+          aspectRatio:3,
+          scales:{
+            x:{
+              type:"linear",
+              title:{display:true,text:"Hours since start"},
+              ticks:{callback:v=>v.toFixed(2)+"h"}
+            },
+            y:{title:{display:true,text:"Price (ETH)"}}
+          }
+        }
+      });
+    } catch(err){
+      console.error(err);
+      details.innerText = "❌ "+(err.data?.message||err.message);
+    }
+  };
+
+  // 3b. Buy NFT
+  $("buyForm").onsubmit = async e=>{
+    e.preventDefault();
+    const out = $("buyResult");
+    out.innerText = "";
+    if(!lastPrice) return alert("Fetch price first");
+
+    try {
+      out.innerText = "⏳ Buying…";
+      const auction = new ethers.Contract(
+        $("auctionAddress").value.trim(),
+        auctionAbi,
+        signer
+      );
+      const tx = await auction.buyNFT({value:lastPrice});
+      await tx.wait();
+      out.innerText = `🎉 Bought! TX: ${tx.hash}`;
+    } catch(err){
+      console.error(err);
+      out.innerText = "❌ "+(err.data?.message||err.message);
+    }
+  };
+})();
+</script>
+
+</body>
+</html>
